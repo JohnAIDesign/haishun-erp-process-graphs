@@ -1,0 +1,1024 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>ERP 流程知识图谱</title>
+<style>
+  /* 取值对齐 Obsidian 默认深色主题的图谱变量：
+     --background-primary #101010 / --graph-line #3f3f3f / --graph-node #b3b3b3 / --graph-text #dadada */
+  :root{
+    --bg:#101010;
+    --fg:#dadada; --fg-dim:#b3b3b3; --fg-faint:#6a6a6a;
+    --panel:#1c1c1c; --panel-bd:#2f2f2f;
+  }
+  html,body{margin:0;height:100%;background:var(--bg);overflow:hidden;
+    font-family:"Microsoft YaHei","PingFang SC",system-ui,-apple-system,sans-serif;
+    -webkit-font-smoothing:antialiased}
+  canvas{display:block;cursor:default}
+
+  #brand{position:fixed;left:26px;top:18px;pointer-events:none;z-index:2}
+  #brand h1{margin:0;font-size:14px;font-weight:600;color:#c8ccd4;letter-spacing:.3px}
+  #brand p{margin:5px 0 0;font-size:11px;color:var(--fg-faint)}
+
+  #filters{position:fixed;left:26px;top:66px;display:flex;gap:5px;flex-wrap:wrap;
+    max-width:calc(100vw - 120px);z-index:3}
+  .chip{padding:3px 9px;border-radius:5px;border:1px solid #2e3238;background:transparent;
+    color:#767c87;font-size:11px;cursor:pointer;user-select:none;transition:.13s}
+  .chip:hover{border-color:#454a52;color:#a9aeb8}
+  .chip.on{background:#2f3a47;border-color:#4a5c70;color:#a9c3dc}
+
+  #legend{position:fixed;left:26px;bottom:16px;display:flex;gap:12px;
+    font-size:10.5px;color:#8c8c8c;pointer-events:none;flex-wrap:wrap;max-width:70vw;z-index:2}
+  #legend span{display:flex;align-items:center;gap:5px}
+  #legend i{width:7px;height:7px;border-radius:50%;display:inline-block}
+
+  #hint{position:fixed;right:22px;bottom:16px;font-size:10.5px;color:#565656;
+    pointer-events:none;z-index:2}
+
+  #gear{position:fixed;right:20px;top:18px;width:28px;height:28px;border-radius:6px;
+    display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:5;
+    color:#6c727d;font-size:15px;user-select:none;transition:.13s;border:1px solid transparent}
+  #gear:hover{background:#282c33;color:#b3b9c3;border-color:#34383f}
+  #gear.on{background:#2f3a47;color:#a9c3dc;border-color:#4a5c70}
+
+  #panel{position:fixed;right:20px;top:54px;width:212px;background:var(--panel);
+    border:1px solid var(--panel-bd);border-radius:8px;padding:10px 12px 12px;z-index:5;
+    font-size:11px;color:#9aa0ab;box-shadow:0 8px 28px rgba(0,0,0,.45);
+    opacity:0;transform:translateY(-6px);pointer-events:none;transition:.16s}
+  #panel.on{opacity:1;transform:none;pointer-events:auto}
+  #panel .sec{font-size:9.5px;letter-spacing:.8px;color:#5a606b;margin:10px 0 6px;
+    text-transform:uppercase;font-weight:600}
+  #panel .sec:first-child{margin-top:2px}
+  #panel .row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:7px 0}
+  #panel .row>span{flex:0 0 56px;color:#7d838e}
+  #panel input[type=text]{width:100%;box-sizing:border-box;background:#1a1c20;
+    border:1px solid #34383f;border-radius:5px;color:#c3c8d0;padding:5px 8px;font-size:11px;
+    outline:none;font-family:inherit}
+  #panel input[type=text]:focus{border-color:#4a5c70}
+  #panel input[type=range]{flex:1;-webkit-appearance:none;height:3px;border-radius:2px;
+    background:#383c44;outline:none}
+  #panel input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:11px;height:11px;
+    border-radius:50%;background:#8fa3bb;cursor:pointer;transition:.1s}
+  #panel input[type=range]::-webkit-slider-thumb:hover{background:#adc1d8}
+  #panel input[type=checkbox]{accent-color:#5c7593;cursor:pointer}
+  .seg{display:flex;border:1px solid #34383f;border-radius:5px;overflow:hidden;flex:1}
+  .seg b{flex:1;text-align:center;padding:3px 0;font-weight:400;cursor:pointer;
+    color:#767c87;transition:.1s;font-size:10.5px}
+  .seg b:hover{color:#a9aeb8}
+  .seg b.on{background:#2f3a47;color:#a9c3dc}
+  #panel button{flex:1;background:#2b2f36;border:1px solid #3c4149;border-radius:5px;
+    color:#9aa0ab;padding:4px 0;font-size:10.5px;cursor:pointer;font-family:inherit;transition:.1s}
+  #panel button:hover{background:#333840;color:#c3c8d0}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="brand">
+  <h1>思源 ERP 流程知识图谱</h1>
+  <p id="sub"></p>
+</div>
+<div id="filters"></div>
+<div id="legend"></div>
+<div id="hint">单击节点飞近 · 再点退回全景 · 悬停高亮邻接 · 拖动平移 · 滚轮缩放 · 双击复位</div>
+<div id="gear">⚙</div>
+<div id="panel">
+  <input type="text" id="q" placeholder="筛选节点…">
+  <div class="sec">显示</div>
+  <div class="row"><span>标签</span>
+    <div class="seg" id="labseg"><b data-v="auto" class="on">自动</b><b data-v="on">常显</b><b data-v="off">隐藏</b></div>
+  </div>
+  <div class="row"><span>箭头</span><input type="checkbox" id="arw" checked></div>
+  <div class="row"><span>节点大小</span><input type="range" id="nsz" min="0.6" max="2" step="0.05" value="1"></div>
+  <div class="sec">力</div>
+  <div class="row"><span>连接力</span><input type="range" id="lf" min="0" max="1" step="0.02" value="1"></div>
+  <div class="row"><span>连接距离</span><input type="range" id="ld" min="40" max="500" step="10" value="130"></div>
+  <div class="row"><span>排斥力</span><input type="range" id="rp" min="0" max="30" step="0.5" value="10"></div>
+  <div class="row"><span>中心力</span><input type="range" id="ct" min="0" max="1" step="0.02" value="0.5"></div>
+  <div class="row"><button id="restart">重新布局</button><button id="fit">适配视图</button></div>
+</div>
+
+<script>
+/* ============================================================
+   1. 数据层 —— 与《ERP流程逐图转录.md》逐条对应，勿改
+   ============================================================ */
+const DOMAINS={"主数据":"#a9b0ba","销售":"#6ba8e8","生产":"#4fc0b0","采购":"#d97fb0",
+  "品质":"#a894dc","仓储":"#e09a55","财务":"#c9b95c"};
+
+const DIA={d1:"销售流程图",d2:"生产流程图",d3:"采购流程图",d4:"品质流程图",
+  d5:"仓库原材料",d6:"仓库成品",d7:"应收流程",d8:"应付流程",d9:"工单成本"};
+
+const N=[
+ ["md_plate","印版资料","主数据"],["md_mat","物料资料","主数据"],["md_mould","模具资料","主数据"],
+ ["md_cust","客户资料","主数据"],["md_price","产品调价","主数据"],["md_prod","产品资料","主数据"],
+ ["md_wc","工作中心","主数据"],["md_waste","损耗标准设置","主数据"],["md_vendor","厂商资料","主数据"],
+ ["md_q1","采购物料报价","主数据"],["md_q2","采购材质报价","主数据"],
+ ["md_tool","检验工具","主数据"],["md_method","检验方法","主数据"],["md_item","检验项目","主数据"],
+ ["md_qplan","检验方案","主数据"],["md_charge","费用项目","主数据"],["md_alloc","分摊费项维护","主数据"],
+ ["md_costadj","存货单价调整","主数据"],["md_ittype","料品类别","主数据"],["md_acc","会计期间","主数据"],
+ ["md_list","列表资料","主数据"],
+
+ ["s_quo","产品报价","销售"],["s_order","销售订单","销售"],["s_appr","审核通过","销售"],
+ ["s_plan","送货计划","销售"],["s_dlv","销售送货","销售"],["s_ret","销售退货","销售"],
+ ["s_complaint","投诉管理","销售"],
+ ["s_inv","销售发票","财务"],["s_tax","客户税单","财务"],["s_stmt","客户月结","财务"],["s_rcv","收款单","财务"],
+
+ ["p_wo","生产工单","生产"],["p_plan","生产计划","生产"],["p_daily","生产日报","生产"],
+ ["p_cut","分切申请","生产"],["p_rout","工序外协","生产"],["p_out","产品外协","生产"],
+ ["p_in","产品入库","生产"],["p_mc","物控评审","生产"],["p_reserve","存货预留","生产"],
+
+ ["u_req","采购请购","采购"],["u_po","采购订单","采购"],["u_appr","审核通过","采购"],
+ ["u_print","打印采购订单","采购"],["u_confirm","与供应商确定交期","采购"],
+ ["u_supply","供应商排产生产与送货","采购"],["u_tmp","暂收待检","采购"],["u_in","采购入库","采购"],
+ ["u_ret","采购退货","采购"],
+ ["u_inv","采购发票","财务"],["u_stmt","厂商月结","财务"],["u_pay","付款单","财务"],
+ ["u_tax","厂商税单","财务"],["u_ap","产生供应商应付","财务"],
+
+ ["q_iqc","进料检验","品质"],["q_skip","免检","品质"],["q_reject","判定不合格退供应商","品质"],
+ ["q_pqc","制程检验","品质"],["q_fqc","成品检验","品质"],["q_rqc","退货检验","品质"],
+ ["q_wh","仓库","仓储"],
+
+ ["w_mw","物料仓","仓储"],["w_pw","成品仓","仓储"],["w_adjin","调整入库","仓储"],
+ ["w_adjout","调整出库","仓储"],["w_pick","生产领料","仓储"],["w_rtn","生产退料","仓储"],
+ ["w_out","产品出库","仓储"],
+
+ ["f_cost","生产成本核算","财务"],["f_costlist","成本核算列表","财务"],
+ ["f_inledger","料品时段入库明细账","财务"],["f_outledger","料品时段出库明细账","财务"]
+];
+
+/* 边：[from, to, 关系语义, 类型(""|"both"|"in"|"out"|"neg"), 属于哪几张图] */
+const E=[
+ // d1 销售流程图（14）
+ ["md_plate","md_prod","构成","","d1"],
+ ["md_mat","md_prod","构成","","d1"],
+ ["md_mould","md_prod","构成","","d1"],
+ ["md_cust","md_price","价格协议","both","d1"],
+ ["md_cust","md_prod","归属","","d1"],
+ ["md_prod","s_quo","报价依据","","d1"],
+ ["s_quo","s_order","成交","","d1"],
+ ["s_order","s_plan","","","d1"],
+ ["s_plan","s_dlv","","","d1"],
+ ["s_dlv","s_ret","","","d1"],
+ ["s_dlv","s_inv","","","d1"],
+ ["s_order","p_wo","","","d1"],
+ ["md_waste","p_wo","定额","","d1"],
+ ["s_complaint","s_ret","引发","","d1"],
+ // d2 生产流程图（14）
+ ["md_prod","s_order","","","d2"],
+ ["s_order","p_wo","","","d2"],
+ ["md_wc","p_plan","产能","","d2"],
+ ["md_waste","p_wo","","","d2"],
+ ["p_wo","p_plan","排产","","d2"],
+ ["p_wo","p_mc","物控","","d2"],
+ ["p_mc","p_reserve","有库存","","d2"],
+ ["p_mc","p_cut","需分切","","d2"],
+ ["p_mc","u_req","缺料","","d2"],
+ ["u_req","u_po","","","d2"],
+ ["p_plan","p_out","外协","","d2"],
+ ["p_plan","p_daily","派工","","d2"],
+ ["p_plan","p_rout","外协","","d2"],
+ ["p_daily","p_in","完工","","d2"],
+ // d3 采购流程图（16）
+ ["md_vendor","u_po","","","d3"],
+ ["md_q1","u_po","比价","","d3"],
+ ["md_q2","u_po","比价","","d3"],
+ ["md_mat","u_req","计划&安全库存","","d3"],
+ ["p_wo","u_req","工单需求","","d3"],
+ ["u_req","u_po","","","d3"],
+ ["u_po","u_tmp","需检验","","d3"],
+ ["u_tmp","q_iqc","","","d3"],
+ ["u_po","u_in","免检","","d3"],
+ ["q_iqc","u_in","允收","","d3"],
+ ["u_in","u_ret","","","d3"],
+ ["w_mw","u_ret","减少","out","d3"],
+ ["u_in","w_mw","增加","in","d3"],
+ ["u_in","u_inv","","","d3"],
+ ["u_inv","u_stmt","","","d3"],
+ ["u_inv","u_ap","","","d3"],
+ // d4 品质流程图（15）
+ ["p_rout","u_tmp","","","d4"],
+ ["u_po","u_tmp","","","d4"],
+ ["p_out","u_tmp","","","d4"],
+ ["u_tmp","q_iqc","","","d4"],
+ ["md_tool","md_qplan","","","d4"],
+ ["md_method","md_qplan","","","d4"],
+ ["md_item","md_qplan","","","d4"],
+ ["md_qplan","q_iqc","","","d4"],
+ ["q_skip","u_in","免检","","d4"],
+ ["q_iqc","q_reject","拒收","neg","d4"],
+ ["q_iqc","u_in","允收","","d4"],
+ ["u_in","q_wh","","","d4"],
+ ["p_wo","q_pqc","","","d4"],
+ ["p_wo","q_fqc","","","d4"],
+ ["s_ret","q_rqc","","","d4"],
+ // d5 仓库原材料（17）
+ ["p_out","u_tmp","","","d5"],
+ ["u_po","u_tmp","","","d5"],
+ ["p_rout","u_tmp","","","d5"],
+ ["u_po","u_in","免检","","d5"],
+ ["u_tmp","q_iqc","","","d5"],
+ ["q_iqc","u_in","允收","","d5"],
+ ["u_in","u_ret","","","d5"],
+ ["w_mw","u_ret","减少","out","d5"],
+ ["u_in","w_mw","增加","in","d5"],
+ ["md_mat","w_adjin","期初入库","","d5"],
+ ["md_prod","w_adjin","期初入库","","d5"],
+ ["w_adjin","w_mw","增加","in","d5"],
+ ["w_mw","w_adjout","减少","out","d5"],
+ ["p_wo","w_pick","","","d5"],
+ ["w_mw","w_pick","减少","out","d5"],
+ ["w_pick","w_rtn","","","d5"],
+ ["w_rtn","w_mw","增加","in","d5"],
+ // d6 仓库成品（10）
+ ["p_wo","p_daily","","","d6"],
+ ["p_wo","p_in","","","d6"],
+ ["p_daily","p_in","","","d6"],
+ ["p_in","w_pw","增加","in","d6"],
+ ["md_prod","w_adjin","期初入库","","d6"],
+ ["w_adjin","w_pw","增加","in","d6"],
+ ["w_pw","w_adjout","减少","out","d6"],
+ ["w_pw","w_out","减少","out","d6"],
+ ["s_dlv","w_out","","","d6"],
+ ["s_dlv","s_ret","","","d6"],
+ // d7 应收流程（9）
+ ["s_order","s_appr","","","d7"],
+ ["s_appr","p_wo","","","d7"],
+ ["s_appr","s_plan","","","d7"],
+ ["s_plan","s_dlv","","","d7"],
+ ["s_dlv","s_ret","","","d7"],
+ ["s_dlv","s_inv","","","d7"],
+ ["s_inv","s_tax","","","d7"],
+ ["s_inv","s_stmt","","","d7"],
+ ["s_stmt","s_rcv","","","d7"],
+ // d8 应付流程（14）
+ ["u_po","u_appr","","","d8"],
+ ["u_appr","u_print","","","d8"],
+ ["u_print","u_confirm","","","d8"],
+ ["u_confirm","u_supply","","","d8"],
+ ["u_supply","u_tmp","","","d8"],
+ ["u_tmp","q_iqc","","","d8"],
+ ["q_iqc","u_in","","","d8"],
+ ["u_supply","u_in","直发","","d8"],
+ ["u_in","q_wh","","","d8"],
+ ["u_in","u_ret","","","d8"],
+ ["q_wh","u_ret","","","d8"],
+ ["u_in","u_inv","","","d8"],
+ ["u_inv","u_stmt","","","d8"],
+ ["u_stmt","u_pay","","","d8"],
+ // d9 工单成本（11）
+ ["p_wo","p_daily","","","d9"],
+ ["p_daily","f_cost","","","d9"],
+ ["md_charge","md_alloc","分摊费项名称设置","","d9"],
+ ["md_alloc","f_cost","","","d9"],
+ ["md_costadj","p_in","","","d9"],
+ ["md_costadj","w_adjin","","","d9"],
+ ["p_in","f_cost","","","d9"],
+ ["w_adjin","f_cost","","","d9"],
+ ["w_pick","f_cost","","","d9"],
+ ["w_rtn","f_cost","","","d9"],
+ ["f_cost","f_costlist","","","d9"]
+];
+
+// 图上有、但没有任何箭头的图标（只在所属图里显示为孤立点）
+const STANDALONE={md_list:"d9",u_tax:"d3",md_ittype:"d9",md_acc:"d9",
+  f_inledger:"d9",f_outledger:"d9",u_in:"d9"};
+
+/* ============================================================
+   2. 建图
+   ============================================================ */
+const nodes=N.map(([id,label,dom])=>({id,label,dom,
+  x:0,y:0,vx:0,vy:0,vdeg:0,r:4,dias:{}}));
+const byId={};nodes.forEach(n=>byId[n.id]=n);
+const links=[];
+E.forEach(([s,t,lb,k,d])=>{
+  let l=links.find(x=>x.s.id===s&&x.t.id===t);
+  if(!l){l={s:byId[s],t:byId[t],lb:lb||"",k:k||"",dias:{}};links.push(l);}
+  if(!l.lb&&lb)l.lb=lb;
+  d.split(",").forEach(x=>l.dias[x]=1);
+});
+links.forEach(l=>{
+  l.s.dias=Object.assign(l.s.dias,l.dias);
+  l.t.dias=Object.assign(l.t.dias,l.dias);
+});
+Object.entries(STANDALONE).forEach(([id,d])=>{if(byId[id])byId[id].dias[d]=1;});
+nodes.forEach(n=>{
+  if(!Object.keys(n.dias).length)n.dias={all:1};
+  // 出现在几张流程图里（"本体卡"上的副标题用）
+  n.dcount=Object.keys(n.dias).filter(k=>k!=="all").length;
+});
+
+/* ============================================================
+   3. 力引擎（对齐 d3-force / Obsidian 的参数语义）
+   ============================================================ */
+const CFG={
+  center:.5,       // 中心力   0..1
+  repel:10,        // 排斥力   0..30
+  linkStr:1,       // 连接力   0..1
+  linkDist:130,    // 连接距离 40..500
+  arrows:true,
+  labelMode:"auto",
+  nodeScale:1,
+  query:""
+};
+
+const SIM={alpha:1,min:.001,decay:1-Math.pow(.001,1/300),vel:.6};
+
+// 固定种子，保证每次打开布局一致
+let _seed=20261112;
+function jiggle(){
+  _seed=(_seed+0x6D2B79F5)|0;
+  let t=Math.imul(_seed^(_seed>>>15),1|_seed);
+  t=(t+Math.imul(t^(t>>>7),61|t))^t;
+  return ((t^(t>>>14))>>>0)/4294967296-.5;
+}
+
+let filter=null;
+let A={nodes:[],links:[]};
+let needStretch=true;
+
+function visible(n){return !filter||n.dias[filter];}
+function eVis(l){return !filter||l.dias[filter];}
+
+function refresh(){
+  A.nodes=nodes.filter(visible);
+  const set=new Set(A.nodes.map(n=>n.id));
+  A.links=links.filter(l=>eVis(l)&&set.has(l.s.id)&&set.has(l.t.id));
+  nodes.forEach(n=>n.vdeg=0);
+  A.links.forEach(l=>{l.s.vdeg++;l.t.vdeg++;});
+  const md=Math.max(1,...A.nodes.map(n=>n.vdeg));
+  nodes.forEach(n=>{n.r=2.6+4.6*Math.sqrt((n.vdeg||0)/md);});
+  // 孤立节点编号：绕着同图重心分散排布，免得挤成一坨看不清标签
+  let iso=0;
+  A.nodes.forEach(n=>{n.isoIdx=n.vdeg?-1:iso++;});
+}
+
+function tick(){
+  SIM.alpha += (0-SIM.alpha)*SIM.decay;
+  const a=SIM.alpha, ns=A.nodes, ls=A.links, n=ns.length;
+
+  // 连接力：两端按度数分担，高度数节点被拉得少
+  for(let k=0;k<ls.length;k++){
+    const s=ls[k].s,t=ls[k].t;
+    let dx=(t.x+t.vx)-(s.x+s.vx), dy=(t.y+t.vy)-(s.y+s.vy);
+    if(!dx&&!dy){dx=jiggle();dy=jiggle();}
+    const d=Math.hypot(dx,dy)||1;
+    const ds=s.vdeg||1, dt=t.vdeg||1;
+    const f=(d-CFG.linkDist)/d*a*CFG.linkStr/Math.min(ds,dt);
+    const bias=ds/(ds+dt);
+    s.vx+=dx*f*(1-bias); s.vy+=dy*f*(1-bias);
+    t.vx-=dx*f*bias;     t.vy-=dy*f*bias;
+  }
+
+  // 排斥力（类库仑，1/d²）。节点少时按 √n 归一，避免小子图被撑得过散
+  const repK=CFG.repel*22*(n<55?Math.sqrt(n/55):1)*a;
+  for(let i=0;i<n;i++){
+    const p=ns[i];
+    for(let j=0;j<n;j++){
+      if(i===j)continue;
+      const q=ns[j];
+      let dx=q.x-p.x, dy=q.y-p.y;
+      let d2=dx*dx+dy*dy;
+      if(d2<1){dx=jiggle();dy=jiggle();d2=1;}
+      if(d2<1600)d2=Math.sqrt(1600*d2);
+      const w=-repK/d2;
+      p.vx+=dx*w; p.vy+=dy*w;
+    }
+  }
+
+  // 中心力
+  let cx=0,cy=0;
+  for(let i=0;i<n;i++){cx+=ns[i].x;cy+=ns[i].y;}
+  cx/=n||1;cy/=n||1;
+  for(let i=0;i<n;i++){
+    const p=ns[i];
+    p.vx+=(cx-p.x)*CFG.center*.05*a;
+    p.vy+=(cy-p.y)*CFG.center*.05*a;
+  }
+
+  // 孤立节点（图上无箭头）：牵到"同一张流程图"的重心附近，避免漂到图外
+  for(let i=0;i<n;i++){
+    const p=ns[i];
+    if(p.vdeg)continue;
+    let sx=0,sy=0,c=0;
+    for(let j=0;j<n;j++){
+      const m=ns[j];
+      if(m===p)continue;
+      let same=false;
+      for(const k in p.dias){if(m.dias[k]){same=true;break;}}
+      if(same){sx+=m.x;sy+=m.y;c++;}
+    }
+    const tx=c?sx/c:cx, ty=c?sy/c:cy;
+    const ang=(p.isoIdx||0)*2.39996, R=58+24*(p.isoIdx||0);
+    const gx=tx+Math.cos(ang)*R, gy=ty+Math.sin(ang)*R;
+    p.vx+=(gx-p.x)*.06;p.vy+=(gy-p.y)*.06;
+  }
+
+  // 积分
+  for(let i=0;i<n;i++){
+    const p=ns[i];
+    p.x+=p.vx*=SIM.vel;
+    p.y+=p.vy*=SIM.vel;
+  }
+
+  // 碰撞（节点不重叠）。本体卡成形时把卡片的屏幕尺寸折算回世界坐标，
+  // 让节点在放大态下自动让开，不至于几张卡叠在一起
+  const ct=cardT();
+  for(let i=0;i<n;i++){
+    const p=ns[i];
+    for(let j=i+1;j<n;j++){
+      const q=ns[j];
+      let dx=q.x-p.x, dy=q.y-p.y;
+      const d=Math.hypot(dx,dy)||1;
+      const extra=ct>0?((p.cr||0)+(q.cr||0))*.8/view.k:0;
+      const min=p.r+q.r+16+extra;
+      if(d<min){
+        const push=(min-d)/d*.5;
+        p.x-=dx*push; p.y-=dy*push;
+        q.x+=dx*push; q.y+=dy*push;
+      }
+    }
+  }
+}
+
+function reheat(v){
+  SIM.alpha=Math.max(SIM.alpha,v);
+}
+
+function restarts(instant){
+  refresh();
+  needStretch=true;
+  _seed=20261112;
+  const a=Math.PI*(3-Math.sqrt(5));
+  A.nodes.forEach((p,i)=>{
+    const rr=14*Math.sqrt(.5+i), ang=i*a;
+    p.x=rr*Math.cos(ang); p.y=rr*Math.sin(ang);
+    p.vx=p.vy=0;
+  });
+  SIM.alpha=1;
+  for(let i=0;i<320;i++)tick();
+  fitView(instant);
+}
+
+/* ============================================================
+   4. 视图
+   ============================================================ */
+const cv=document.getElementById("c"),ctx=cv.getContext("2d");
+let W=0,H=0,DPR=1;
+let view={cx:0,cy:0,k:1};      // 当前渲染的相机
+let TV={cx:0,cy:0,k:1};        // 相机目标，每帧缓动逼近
+let hoverId=null,focusId=null,dragNode=null,panning=null,downPt=null,dragMoved=false;
+
+function resize(){
+  W=window.innerWidth;H=window.innerHeight;
+  DPR=Math.min(2,window.devicePixelRatio||1);
+  cv.style.width=W+"px";cv.style.height=H+"px";
+  cv.width=Math.round(W*DPR);cv.height=Math.round(H*DPR);
+}
+window.addEventListener("resize",()=>{resize();draw();});
+resize();
+
+// 节点半径随缩放增长但被压平（Obsidian 观感：放大后点仍然"点"，不会变成球）
+function rad(n){return Math.max(1.6,n.r*Math.pow(view.k,.7)*CFG.nodeScale);}
+
+// ---- 语义缩放：超过 CARD0 开始由"点"长成"本体卡"，CARD1 完全成形 ----
+const CARD0=1.05, CARD1=1.35;
+function cardT(){return Math.min(1,Math.max(0,(view.k-CARD0)/(CARD1-CARD0)));}
+function metaOf(n){return n.dom+" · "+n.dcount+" 张图";}
+
+function proj(p){return{x:(p.x-view.cx)*view.k+W/2, y:(p.y-view.cy)*view.k+H/2};}
+function toWorld(px,py){return{x:(px-W/2)/view.k+view.cx, y:(py-H/2)/view.k+view.cy};}
+function toWorldT(px,py){return{x:(px-W/2)/TV.k+TV.cx, y:(py-H/2)/TV.k+TV.cy};}
+
+// 相机缓动：位置线性插值，缩放按对数插值（避免放大时忽快忽慢）
+function stepCam(){
+  const s=.105;
+  view.cx+=(TV.cx-view.cx)*s;
+  view.cy+=(TV.cy-view.cy)*s;
+  view.k*=Math.pow(TV.k/view.k,s);
+  if(Math.abs(TV.cx-view.cx)<.06&&Math.abs(TV.cy-view.cy)<.06&&Math.abs(TV.k/view.k-1)<6e-4){
+    view.cx=TV.cx;view.cy=TV.cy;view.k=TV.k;
+  }
+}
+
+function fitView(instant){
+  if(!A.nodes.length)return;
+  let x0=1e9,x1=-1e9,y0=1e9,y1=-1e9;
+  A.nodes.forEach(n=>{
+    x0=Math.min(x0,n.x);x1=Math.max(x1,n.x);
+    y0=Math.min(y0,n.y);y1=Math.max(y1,n.y);
+  });
+  const padX=95, padY=95;
+  let bw=Math.max(80,x1-x0), bh=Math.max(80,y1-y0);
+
+  // 画布是宽屏而力布局常偏竖长：横向做一次性拉伸，让图填满视野
+  // （只改坐标比例，不改拓扑；下次重新布局会从零点重来，不会累积变形）
+  const vAsp=(W-padX*2)/(H-padY*2);
+  if(needStretch&&bw/bh<vAsp*.86){
+    const s=Math.min(vAsp*.86/(bw/bh),1.75);
+    const mx=(x0+x1)/2;
+    A.nodes.forEach(n=>{n.x=mx+(n.x-mx)*s;});
+    x0=mx+(x0-mx)*s; x1=mx+(x1-mx)*s;
+    bw=x1-x0;
+    needStretch=false;
+  }
+
+  const k=Math.min((W-padX*2)/bw,(H-padY*2)/bh,2.2);
+  TV.k=Math.max(.15,k);
+  TV.cx=(x0+x1)/2; TV.cy=(y0+y1)/2;
+  if(instant){view.k=TV.k;view.cx=TV.cx;view.cy=TV.cy;}
+}
+
+// 点击节点：镜头飞过去并保持一个可读的放大级别
+function flyTo(n){
+  TV.cx=n.x;TV.cy=n.y;
+  TV.k=Math.min(3.2,Math.max(view.k*1.5,1.7));
+}
+
+function nbrSet(id){
+  const s=new Set([id]);
+  for(const l of A.links){
+    if(l.s.id===id)s.add(l.t.id);
+    if(l.t.id===id)s.add(l.s.id);
+  }
+  return s;
+}
+
+/* ============================================================
+   5. 渲染
+   ============================================================ */
+const tmpRect=[];
+function draw(){
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+
+  // 背景：#101010，留一丝径向差让中心不至于死板
+  const g=ctx.createRadialGradient(W*.5,H*.44,30,W*.5,H*.44,Math.max(W,H)*.8);
+  g.addColorStop(0,"#131313");
+  g.addColorStop(1,"#0c0c0c");
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+
+  const actId=focusId||hoverId;
+  const near=actId?nbrSet(actId):null;
+  const q=CFG.query.trim().toLowerCase();
+  const matchId=q?new Set(A.nodes.filter(n=>n.label.toLowerCase().includes(q)).map(n=>n.id)):null;
+
+  const hotNode=id=>(near&&near.has(id))||(matchId&&matchId.has(id));
+  const dimNode=id=>(near&&!near.has(id))||(matchId&&!matchId.has(id));
+
+  // ---- 连线 ----
+  ctx.lineCap="round";
+  for(const l of A.links){
+    const ps=proj(l.s), pt=proj(l.t);
+    const r1=rad(l.s), r2=rad(l.t);
+    let dx=pt.x-ps.x, dy=pt.y-ps.y;
+    const d=Math.hypot(dx,dy)||1;
+    const ux=dx/d, uy=dy/d;
+    const sx=ps.x+ux*(r1+2), sy=ps.y+uy*(r1+2);
+    const ex=pt.x-ux*(r2+2), ey=pt.y-uy*(r2+2);
+
+    const on=near&&near.has(l.s.id)&&near.has(l.t.id);
+    const hit=(matchId&&matchId.has(l.s.id)&&matchId.has(l.t.id));
+    const dim=dimNode(l.s.id)&&dimNode(l.t.id);
+
+    // 连线默认 #3f3f3f（Obsidian --graph-line），高亮时提亮到 #dadada
+    let color, alpha, wdt;
+    if(on||hit){
+      alpha=1;
+      wdt=1.6;
+      color=l.k==="in"?"#4ade80":l.k==="out"?"#f87171":l.k==="neg"?"#ef4444":"#dadada";
+    }else if(dim){
+      alpha=.06;
+      wdt=1;
+      color="#3f3f3f";
+    }else{
+      alpha=l.k==="neg"?.5:l.k?.4:1;
+      wdt=1;
+      color=l.k==="in"?"#4ade80":l.k==="out"?"#f87171":l.k==="neg"?"#ef4444":"#3f3f3f";
+    }
+
+    ctx.globalAlpha=alpha;
+    ctx.strokeStyle=color;
+    ctx.lineWidth=wdt;
+    ctx.beginPath();
+    ctx.moveTo(sx,sy);ctx.lineTo(ex,ey);
+    ctx.stroke();
+
+    // 箭头：小而克制，缩放足够或高亮时才明显
+    if(CFG.arrows){
+      const aa=Math.min(1,alpha*(on||hit?1.6:(view.k>.75?1:.55)));
+      const size=(on||hit?6:4.6)*Math.min(1.5,Math.max(.85,Math.pow(view.k,.35)));
+      ctx.globalAlpha=Math.min(1,aa);
+      arrowHead(ex,ey,ux,uy,color,size);
+      if(l.k==="both")arrowHead(sx,sy,-ux,-uy,color,size);
+    }
+  }
+
+  // ---- 节点 ----
+  const hot=[],now=performance.now();
+  const ct=cardT();
+  // 卡片随缩放轻微长大，避免深度放大后只剩大把空白
+  const cz=1+.22*Math.max(0,Math.log2(Math.max(view.k,1)/CARD1));
+  const F_NAME_D="600 "+(12.5*cz).toFixed(1)+"px 'Microsoft YaHei',sans-serif";
+  const F_META_D=(10*cz).toFixed(1)+"px 'Microsoft YaHei',sans-serif";
+
+  for(const n of A.nodes){
+    const isHover=hoverId===n.id, isFocus=focusId===n.id;
+    const isNear=near&&near.has(n.id);
+    const dim=dimNode(n.id);
+
+    // 悬停/聚焦时轻微放大，带缓动，不是瞬跳
+    n.hs=(n.hs||0)+(((isHover||isFocus)?1:0)-(n.hs||0))*.22;
+
+    const p=proj(n);
+    const rDot=rad(n)*(1+.2*n.hs);
+
+    // 卡片尺寸由文字决定，保证名字不出圈
+    let rCard=rDot, meta="";
+    if(ct>0){
+      meta=metaOf(n);
+      ctx.font=F_NAME_D;
+      let w=ctx.measureText(n.label).width;
+      ctx.font=F_META_D;
+      w=Math.max(w,ctx.measureText(meta).width);
+      rCard=Math.max(29*cz,w/2+15*cz);
+    }
+    const r=rDot+(rCard-rDot)*ct;
+    n.dr=r; n.cr=rCard;   // 供命中测试与布局避让用
+
+    if(p.x<-r-70||p.x>W+r+70||p.y<-r-70||p.y>H+r+70)continue;
+
+    const baseA=dim?.14:1;
+    // 点与卡在很窄的区间内交替换形，避免中间出现"空心圈"或文字压在半透明底上
+    const aDot=baseA*Math.min(1,Math.max(0,(.55-ct)/.1));
+    const aCard=baseA*Math.min(1,Math.max(0,(ct-.45)/.1));
+
+    // —— 圆点形态（低倍时）——
+    if(aDot>.01){
+      ctx.globalAlpha=aDot;
+      if(isHover||isFocus||(isNear&&actId)){
+        ctx.beginPath();ctx.arc(p.x,p.y,rDot+3+(isHover||isFocus?3:0),0,7);
+        ctx.fillStyle=DOMAINS[n.dom]+(isFocus?"55":"33");ctx.fill();
+      }
+      ctx.beginPath();ctx.arc(p.x,p.y,rDot,0,7);
+      ctx.fillStyle=DOMAINS[n.dom];ctx.fill();
+      if(isHover||isFocus){
+        ctx.lineWidth=1.4;ctx.strokeStyle="rgba(235,240,248,.9)";ctx.stroke();
+      }
+    }
+
+    // —— 本体卡形态（放大后）——
+    if(aCard>.01){
+      ctx.globalAlpha=aCard;
+
+      ctx.beginPath();ctx.arc(p.x,p.y,r,0,7);
+      ctx.fillStyle="#191919";ctx.fill();
+      ctx.strokeStyle=DOMAINS[n.dom];
+      ctx.lineWidth=(isHover||isFocus)?2.2:1.5;
+      ctx.stroke();
+
+      if(isHover||isFocus){
+        ctx.beginPath();ctx.arc(p.x,p.y,r+5,0,7);
+        ctx.strokeStyle=DOMAINS[n.dom]+"66";ctx.lineWidth=1;ctx.stroke();
+      }
+
+      // 聚焦：外面再套一圈虚线（对齐参考图里被选中的那个节点）
+      if(isFocus){
+        ctx.save();ctx.setLineDash([5,5]);
+        ctx.beginPath();ctx.arc(p.x,p.y,r+12,0,7);
+        ctx.strokeStyle=DOMAINS[n.dom]+"aa";ctx.lineWidth=1.2;ctx.stroke();
+        ctx.restore();
+      }
+
+      ctx.textAlign="center";ctx.textBaseline="middle";
+      ctx.font=F_NAME_D;
+      ctx.fillStyle="#ececec";
+      ctx.fillText(n.label,p.x,p.y-8*cz);
+      ctx.font=F_META_D;
+      ctx.fillStyle=DOMAINS[n.dom];
+      ctx.fillText(meta,p.x,p.y+10*cz);
+    }
+
+    // 点击涟漪：一圈由内向外扩散并淡出
+    const dt=now-(n.popT||-1e9);
+    if(dt<820){
+      const e=1-dt/820;
+      ctx.beginPath();ctx.arc(p.x,p.y,r+2+(1-e)*46,0,7);
+      ctx.strokeStyle=DOMAINS[n.dom];
+      ctx.globalAlpha=e*e*.65;
+      ctx.lineWidth=1.6;
+      ctx.stroke();
+      ctx.globalAlpha=baseA;
+    }
+
+    if(!dim)hot.push({n,p,r,isHover,isFocus,isNear:!!isNear,ct});
+  }
+
+  // ---- 标签 ----
+  const la=CFG.labelMode;
+  const zoomA=Math.min(1,Math.max(0,(view.k-.34)/.32));
+  const baseA=la==="off"?0:la==="on"?1:zoomA;
+
+  tmpRect.length=0;
+  hot.sort((a,b)=>(b.isHover||b.isFocus?9:0)-(a.isHover||a.isFocus?9:0)||b.n.vdeg-a.n.vdeg);
+
+  for(const item of hot){
+    const {n,p,r}=item;
+    // 本体卡成形后文字已经在圈里，外挂标签淡出，避免一份内容画两遍
+    const cardFade=1-Math.min(1,item.ct*2.2);
+    if(cardFade<=.02)continue;
+    const always=item.isHover||item.isFocus||(actId&&item.isNear);
+    let a=(always?1:baseA)*cardFade;
+    if(a<=.02)continue;
+    if(dimNode(n.id))continue;
+
+    const lf=Math.min(1.55,Math.max(.86,Math.pow(view.k,.42)));
+    const fs=(item.isHover||item.isFocus?12.5:11.5)*lf;
+    ctx.font=(item.isHover||item.isFocus?"600 ":"400 ")+fs+"px 'Microsoft YaHei',sans-serif";
+    const tw=ctx.measureText(n.label).width;
+    const w=tw+4, h=fs+3, cx0=p.x-tw/2-2;
+    let x0=cx0, y0=p.y+r+4;
+
+    // 标签避让：优先放下方，放不下再试上方（Obsidian 同样做重叠裁剪）
+    if(!(item.isHover||item.isFocus)){
+      const clashAt=(bx,by)=>{
+        for(let i=0;i<tmpRect.length;i+=4){
+          if(bx<tmpRect[i]+tmpRect[i+2]&&bx+w>tmpRect[i]&&
+             by<tmpRect[i+1]+tmpRect[i+3]&&by+h>tmpRect[i+1])return true;
+        }
+        return false;
+      };
+      if(clashAt(x0,y0)){
+        const yUp=p.y-r-4-fs;
+        if(clashAt(x0,yUp))continue;
+        y0=yUp;
+      }
+    }
+    tmpRect.push(x0,y0,w,h);
+
+    ctx.globalAlpha=a*(item.isHover||item.isFocus?1:.95);
+    ctx.textAlign="center";ctx.textBaseline="top";
+    ctx.lineWidth=3.4;ctx.strokeStyle="rgba(10,10,10,.95)";
+    ctx.strokeText(n.label,p.x,y0);
+    ctx.fillStyle=item.isHover||item.isFocus?"#f5f5f5":"#dadada";
+    ctx.fillText(n.label,p.x,y0);
+  }
+
+  // ---- 边语义标签：悬停时只显邻接边；放大到本体层后全显（带避让）----
+  if(ct>.45||actId){
+    ctx.font="10px 'Microsoft YaHei',sans-serif";
+    ctx.textAlign="center";ctx.textBaseline="middle";
+    const showAll=ct>.8&&!actId;
+    const used=[];
+    for(const l of A.links){
+      if(!l.lb)continue;
+      const on=near&&near.has(l.s.id)&&near.has(l.t.id);
+      if(!on&&!showAll)continue;
+      if(!on&&(dimNode(l.s.id)||dimNode(l.t.id)))continue;
+      const ps=proj(l.s),pt=proj(l.t);
+      const mx=(ps.x+pt.x)/2,my=(ps.y+pt.y)/2;
+      const tw=ctx.measureText(l.lb).width;
+      const bw=tw+10,bh=16,bx=mx-bw/2,by=my-bh/2;
+      let clash=false;
+      for(let i=0;i<used.length;i+=4){
+        if(bx<used[i]+used[i+2]&&bx+bw>used[i]&&by<used[i+1]+used[i+3]&&by+bh>used[i+1]){clash=true;break;}
+      }
+      if(clash&&!on)continue;
+      used.push(bx,by,bw,bh);
+      ctx.globalAlpha=on?1:.8;
+      ctx.fillStyle="rgba(14,14,14,.94)";
+      ctx.beginPath();
+      roundRect(bx,by,bw,bh,4);
+      ctx.fill();
+      ctx.strokeStyle=l.k==="in"?"rgba(74,222,128,.5)":l.k==="out"||l.k==="neg"?"rgba(248,113,113,.5)":"rgba(140,155,175,.45)";
+      ctx.lineWidth=1;ctx.stroke();
+      ctx.fillStyle=l.k==="in"?"#7fdba2":l.k==="out"||l.k==="neg"?"#e89393":"#9aa7b8";
+      ctx.fillText(l.lb,mx,my);
+    }
+  }
+
+  ctx.globalAlpha=1;
+}
+
+function arrowHead(x,y,ux,uy,color,size){
+  const a=Math.atan2(uy,ux);
+  ctx.beginPath();
+  ctx.moveTo(x,y);
+  ctx.lineTo(x-size*Math.cos(a-.44),y-size*Math.sin(a-.44));
+  ctx.lineTo(x-size*Math.cos(a+.44),y-size*Math.sin(a+.44));
+  ctx.closePath();
+  ctx.fillStyle=color;ctx.fill();
+}
+
+function roundRect(x,y,w,h,r){
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);
+  ctx.arcTo(x,y,x+w,y,r);
+  ctx.closePath();
+}
+
+/* ============================================================
+   6. 主循环
+   ============================================================ */
+let lastCt=0;
+function loop(){
+  if(SIM.alpha>SIM.min){
+    for(let i=0;i<2;i++)tick();
+  }
+  stepCam();
+
+  // 进出本体层时轻推一下模拟，让卡片按新尺寸重新让位
+  const c=cardT();
+  if((lastCt<.5)!==(c<.5)){reheat(.3);}
+  lastCt=c;
+
+  draw();
+  requestAnimationFrame(loop);
+}
+
+/* ============================================================
+   7. 交互
+   ============================================================ */
+function pick(px,py){
+  const w=toWorld(px,py);
+  let best=null,bd=1e9;
+  for(const n of A.nodes){
+    const d=Math.hypot(n.x-w.x,n.y-w.y);
+    const hit=Math.max((n.dr||rad(n))*1.1,11/view.k);
+    if(d<hit&&d<bd){bd=d;best=n;}
+  }
+  return best;
+}
+
+cv.addEventListener("mousemove",e=>{
+  const r=cv.getBoundingClientRect();
+  const px=e.clientX-r.left, py=e.clientY-r.top;
+
+  if(dragNode){
+    const w=toWorld(px,py);
+    dragNode.x=w.x;dragNode.y=w.y;
+    dragNode.vx=dragNode.vy=0;
+    reheat(.35);
+    dragMoved=true;
+    return;
+  }
+  if(panning){
+    // 平移不走缓动，手随光标 1:1 移动
+    const dx=(px-panning.x)/view.k, dy=(py-panning.y)/view.k;
+    view.cx-=dx;view.cy-=dy;
+    TV.cx=view.cx;TV.cy=view.cy;
+    panning={x:px,y:py};
+    dragMoved=true;
+    return;
+  }
+  const n=pick(px,py);
+  const id=n?n.id:null;
+  if(id!==hoverId){hoverId=id;}
+  cv.style.cursor=n?"pointer":(downPt?"grabbing":"default");
+});
+
+cv.addEventListener("mousedown",e=>{
+  const r=cv.getBoundingClientRect();
+  const px=e.clientX-r.left, py=e.clientY-r.top;
+  dragMoved=false;
+  downPt={x:px,y:py};
+  const n=pick(px,py);
+  if(n){
+    dragNode=n;
+  }else{
+    panning={x:px,y:py};
+  }
+});
+
+window.addEventListener("mouseup",()=>{
+  if(dragNode){reheat(.5);}
+  dragNode=null;panning=null;
+  cv.style.cursor=hoverId?"pointer":"default";
+});
+
+// 拖拽超过 4px 就不算点击，避免拖完节点又触发飞近
+cv.addEventListener("mousemove",e=>{
+  if(downPt&&dragNode){
+    const r=cv.getBoundingClientRect();
+    if(Math.hypot(e.clientX-r.left-downPt.x,e.clientY-r.top-downPt.y)>4)dragMoved=true;
+  }
+});
+
+cv.addEventListener("click",e=>{
+  if(dragMoved){dragMoved=false;downPt=null;return;}
+  downPt=null;
+  const r=cv.getBoundingClientRect();
+  const n=pick(e.clientX-r.left,e.clientY-r.top);
+  if(n){
+    if(focusId===n.id){          // 再点一次：退回全景
+      focusId=null;
+      fitView();
+    }else{                        // 首次点击：镜头飞过去 + 涟漪
+      focusId=n.id;
+      n.popT=performance.now();
+      flyTo(n);
+    }
+  }else{
+    focusId=null;
+  }
+  updateSub();
+});
+
+cv.addEventListener("dblclick",e=>{
+  const r=cv.getBoundingClientRect();
+  if(!pick(e.clientX-r.left,e.clientY-r.top)){
+    focusId=null;hoverId=null;fitView();
+  }
+});
+
+// 滚轮缩放：改的是目标相机，实际画面缓动追上去（以光标为锚）
+cv.addEventListener("wheel",e=>{
+  e.preventDefault();
+  const r=cv.getBoundingClientRect();
+  const px=e.clientX-r.left, py=e.clientY-r.top;
+  const before=toWorldT(px,py);
+  const factor=Math.pow(1.0016,-e.deltaY);
+  TV.k=Math.min(4.5,Math.max(.1,TV.k*factor));
+  const after=toWorldT(px,py);
+  TV.cx+=before.x-after.x;
+  TV.cy+=before.y-after.y;
+},{passive:false});
+
+/* ============================================================
+   8. 顶部图筛选
+   ============================================================ */
+const fbox=document.getElementById("filters");
+
+function updateSub(){
+  const ns=A.nodes.length, es=A.links.length;
+  const extra=focusId?" · 聚焦「"+byId[focusId].label+"」":"";
+  document.getElementById("sub").textContent=
+    ns+" 个环节 · "+es+" 条流转"+(filter?" · 来自「"+DIA[filter]+"」":" · 9 张流程图合并")+extra;
+}
+
+function applyFilter(){
+  restarts();
+  focusId=null;
+  updateSub();
+}
+
+function chip(label,val){
+  const el=document.createElement("div");
+  el.className="chip"+(val===null?" on":"");
+  el.textContent=label;
+  el.onclick=()=>{
+    filter=val;
+    [...fbox.children].forEach(c=>c.classList.remove("on"));
+    el.classList.add("on");
+    applyFilter();
+  };
+  fbox.appendChild(el);
+}
+chip("全部",null);
+Object.entries(DIA).forEach(([k,v])=>chip(v,k));
+
+/* ============================================================
+   9. 图例 + 设置面板
+   ============================================================ */
+const lg=document.getElementById("legend");
+Object.entries(DOMAINS).forEach(([d,c])=>{
+  const s=document.createElement("span");
+  s.innerHTML='<i style="background:'+c+'"></i>'+d;
+  lg.appendChild(s);
+});
+const l2=document.createElement("span");
+l2.innerHTML='<i style="background:#4ade80"></i>增加　<i style="background:#f87171"></i>减少';
+lg.appendChild(l2);
+
+const panel=document.getElementById("panel"),gear=document.getElementById("gear");
+gear.onclick=()=>{panel.classList.toggle("on");gear.classList.toggle("on");};
+
+document.getElementById("q").addEventListener("input",e=>{
+  CFG.query=e.target.value;
+});
+document.querySelectorAll("#labseg b").forEach(b=>{
+  b.onclick=()=>{
+    CFG.labelMode=b.dataset.v;
+    document.querySelectorAll("#labseg b").forEach(x=>x.classList.remove("on"));
+    b.classList.add("on");
+  };
+});
+document.getElementById("arw").onchange=e=>{CFG.arrows=e.target.checked;};
+document.getElementById("nsz").oninput=e=>{CFG.nodeScale=+e.target.value;};
+document.getElementById("lf").oninput=e=>{CFG.linkStr=+e.target.value;reheat(.6);};
+document.getElementById("ld").oninput=e=>{CFG.linkDist=+e.target.value;reheat(.6);};
+document.getElementById("rp").oninput=e=>{CFG.repel=+e.target.value;reheat(.6);};
+document.getElementById("ct").oninput=e=>{CFG.center=+e.target.value;reheat(.6);};
+document.getElementById("restart").onclick=()=>restarts();
+document.getElementById("fit").onclick=()=>fitView();
+
+/* ============================================================
+   10. 启动
+   ============================================================ */
+refresh();
+restarts(true);
+updateSub();
+loop();
+</script>
+</body>
+</html>

@@ -1,0 +1,450 @@
+﻿<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>ERP 流程知识图谱</title>
+<style>
+  html,body{margin:0;height:100%;background:#0b0e14;overflow:hidden;
+    font-family:"Microsoft YaHei","PingFang SC",sans-serif}
+  canvas{display:block;cursor:grab}
+  canvas.dragging{cursor:grabbing}
+  #title{position:fixed;left:24px;top:18px;color:#e6edf3;pointer-events:none;z-index:2}
+  #title h1{margin:0;font-size:16px;font-weight:600;letter-spacing:.4px}
+  #title p{margin:5px 0 0;font-size:11.5px;color:#5b6470;line-height:1.55}
+  #legend{position:fixed;left:24px;bottom:18px;display:flex;gap:14px;
+    font-size:11.5px;color:#7d8590;pointer-events:none;flex-wrap:wrap;max-width:64vw;z-index:2}
+  #legend span{display:flex;align-items:center;gap:5px}
+  #legend i{width:8px;height:8px;border-radius:50%;display:inline-block}
+  #hint{position:fixed;right:24px;bottom:18px;font-size:11.5px;color:#3d444d;pointer-events:none;z-index:2}
+  #tip{position:fixed;padding:5px 9px;background:#161b22;border:1px solid #30363d;
+    border-radius:5px;color:#c9d1d9;font-size:11.5px;pointer-events:none;opacity:0;
+    transition:opacity .1s;white-space:nowrap;z-index:3}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="title">
+  <h1>思源 ERP 流程知识图谱</h1>
+  <p id="sub"></p>
+</div>
+<div id="legend"></div>
+<div id="hint">点击节点聚焦邻域 · 拖动调整 · 滚轮缩放 · 双击空白复位</div>
+<div id="tip"></div>
+
+<script>
+const DOMAINS = {
+  "主数据": "#8b949e",
+  "销售":   "#3b82f6",
+  "生产":   "#14b8a6",
+  "采购":   "#ec4899",
+  "品质":   "#a855f7",
+  "仓储":   "#f97316",
+  "财务":   "#eab308"
+};
+
+// id, 标签, 域
+const N = [
+  // ── 主数据（18）
+  ["md_cust","客户资料","主数据"], ["md_prod","产品资料","主数据"],
+  ["md_mat","物料资料","主数据"], ["md_vendor","厂商资料","主数据"],
+  ["md_plate","印版资料","主数据"], ["md_mould","模具资料","主数据"],
+  ["md_price","产品调价","主数据"], ["md_wc","工作中心","主数据"],
+  ["md_waste","损耗标准设置","主数据"], ["md_ittype","料品类别","主数据"],
+  ["md_acc","会计期间","主数据"], ["md_charge","费用项目","主数据"],
+  ["md_alloc","分摊费项维护","主数据"], ["md_costadj","存货单价调整","主数据"],
+  ["md_tool","检验工具","主数据"], ["md_method","检验方法","主数据"],
+  ["md_item","检验项目","主数据"], ["md_qplan","检验方案","主数据"],
+  // ── 销售（11）
+  ["s_quo","产品报价","销售"], ["s_order","销售订单","销售"],
+  ["s_appr","审核通过","销售"], ["s_plan","送货计划","销售"],
+  ["s_dlv","销售送货","销售"],
+  ["s_ret","销售退货","销售"], ["s_inv","销售发票","销售"],
+  ["s_tax","客户税单","销售"], ["s_stmt","客户月结","销售"],
+  ["s_rcv","收款单","销售"], ["s_complaint","投诉管理","销售"],
+  // ── 生产（9）
+  ["p_wo","生产工单","生产"], ["p_plan","生产计划","生产"],
+  ["p_daily","生产日报","生产"], ["p_cut","分切申请","生产"],
+  ["p_rout","工序外协","生产"], ["p_out","产品外协","生产"],
+  ["p_in","产品入库","生产"], ["p_mc","物控评审","生产"],
+  ["p_reserve","存货预留","生产"],
+  // ── 采购（15）
+  ["u_quo1","采购物料报价","采购"], ["u_quo2","采购材质报价","采购"],
+  ["u_req","采购请购","采购"], ["u_po","采购订单","采购"],
+  ["u_appr","审核通过","采购"], ["u_print","打印采购订单","采购"],
+  ["u_confirm","与供应商确定交期","采购"], ["u_supply","供应商排产送货","采购"],
+  ["u_tmp","暂收待检","采购"], ["u_in","采购入库","采购"],
+  ["u_ret","采购退货","采购"], ["u_inv","采购发票","采购"],
+  ["u_stmt","厂商月结","采购"], ["u_tax","厂商税单","采购"],
+  ["u_pay","付款单","采购"],
+  // ── 品质（6）
+  ["q_iqc","进料检验","品质"], ["q_pqc","制程检验","品质"],
+  ["q_fqc","成品检验","品质"], ["q_rqc","退货检验","品质"],
+  ["q_skip","免检","品质"], ["q_reject","判定不合格","品质"],
+  // ── 仓储（8）
+  ["w_mw","物料仓","仓储"], ["w_pw","成品仓","仓储"],
+  ["w_init","期初入库","仓储"], ["w_adjin","调整入库","仓储"],
+  ["w_adjout","调整出库","仓储"], ["w_pick","生产领料","仓储"],
+  ["w_rtn","生产退料","仓储"], ["w_out","产品出库","仓储"],
+  // ── 财务（6）
+  ["f_ar","应收账款","财务"], ["f_ap","应付账款","财务"],
+  ["f_cost","生产成本核算","财务"], ["f_costlist","成本核算列表","财务"],
+  ["f_inledger","料品入库明细账","财务"], ["f_outledger","料品出库明细账","财务"]
+];
+
+// from, to, 类型(""普通 | "both"双向 | "in"入库增加 | "out"出库减少 | "neg"不合格)
+const E = [
+  // 销售流程
+  ["md_plate","md_prod",""], ["md_mat","md_prod",""], ["md_mould","md_prod",""],
+  ["md_cust","md_prod",""], ["md_cust","md_price","both"],
+  ["md_prod","s_quo",""], ["s_quo","s_order",""], ["s_order","s_appr",""],
+  ["s_appr","s_plan",""], ["s_appr","p_wo",""],
+  ["s_plan","s_dlv",""], ["s_dlv","s_ret",""],
+  ["s_dlv","s_inv",""], ["s_ret","s_complaint",""],
+  ["s_inv","s_tax",""], ["s_inv","s_stmt",""], ["s_stmt","s_rcv",""],
+  // 生产流程
+  ["s_order","p_wo",""], ["md_waste","p_wo",""],
+  ["md_wc","p_plan",""], ["p_wo","p_plan",""],
+  ["p_wo","p_mc",""], ["p_mc","p_reserve",""], ["p_mc","u_req",""],
+  ["p_wo","p_cut",""],
+  ["p_plan","p_out",""], ["p_plan","p_daily",""], ["p_plan","p_rout",""],
+  ["p_daily","p_in",""],
+  // 采购流程
+  ["md_vendor","u_po",""], ["u_quo1","u_po",""], ["u_quo2","u_po",""],
+  ["md_mat","u_req",""], ["p_wo","u_req",""],
+  ["u_req","u_po",""],
+  ["u_po","u_appr",""], ["u_appr","u_print",""],
+  ["u_print","u_confirm",""], ["u_confirm","u_supply",""],
+  ["u_supply","u_tmp",""], ["u_tmp","q_iqc",""],
+  ["q_iqc","u_in",""], ["q_skip","u_in",""], ["q_iqc","q_reject","neg"],
+  ["u_in","u_ret",""], ["u_in","w_mw","in"], ["u_in","u_inv",""],
+  ["u_inv","u_stmt",""], ["u_stmt","u_pay",""], ["u_inv","u_tax",""],
+  ["u_in","f_ap",""],
+  // 品质
+  ["md_tool","md_qplan",""], ["md_method","md_qplan",""], ["md_item","md_qplan",""],
+  ["md_qplan","q_iqc",""],
+  ["p_wo","q_pqc",""], ["p_out","q_fqc",""], ["s_ret","q_rqc",""],
+  ["p_rout","u_tmp",""], ["p_out","u_tmp",""],
+  // 仓储
+  ["w_init","w_adjin",""],
+  ["w_adjin","w_mw","in"], ["w_adjin","w_pw","in"],
+  ["w_mw","w_adjout","out"], ["w_pw","w_adjout","out"],
+  ["p_wo","w_pick",""], ["w_mw","w_pick","out"],
+  ["p_wo","w_rtn",""], ["w_rtn","w_mw","in"],
+  ["p_in","w_pw","in"],
+  ["s_dlv","w_out",""], ["w_pw","w_out","out"],
+  // 财务与成本
+  ["s_inv","f_ar",""], ["p_in","f_cost",""],
+  ["w_pick","f_cost",""], ["w_rtn","f_cost",""],
+  ["f_cost","f_costlist",""],
+  ["md_ittype","f_inledger",""], ["md_acc","f_inledger",""],
+  ["u_in","f_inledger",""], ["w_out","f_outledger",""],
+  ["md_charge","md_alloc",""], ["md_alloc","f_cost",""],
+  ["md_costadj","w_adjin",""]
+];
+
+// ---------- 建图 ----------
+const nodes = N.map(([id, label, dom]) => ({
+  id, label, dom, x: 0, y: 0, deg: 0, r: 5
+}));
+const byId = Object.fromEntries(nodes.map(n => [n.id, n]));
+const links = E.map(([s, t, k]) => ({ s: byId[s], t: byId[t], k: k || "" }))
+              .filter(l => l.s && l.t);
+links.forEach(l => { l.s.deg++; l.t.deg++; });
+const maxDeg = Math.max(1, ...nodes.map(n => n.deg));
+nodes.forEach(n => { n.r = 4.5 + 6.5 * Math.sqrt(n.deg / maxDeg); });
+
+// 域锚点（椭圆，适配宽屏）
+const domNames = Object.keys(DOMAINS);
+const RX = 620, RY = 340, CENTER = { x: 0, y: 0 };
+const anchors = {};
+domNames.forEach((d, i) => {
+  const a = -Math.PI / 2 + i * 2 * Math.PI / domNames.length;
+  anchors[d] = { x: CENTER.x + RX * Math.cos(a), y: CENTER.y + RY * Math.sin(a) };
+});
+nodes.forEach(n => {
+  const a = anchors[n.dom];
+  n.x = a.x + (Math.random() - .5) * 260;
+  n.y = a.y + (Math.random() - .5) * 200;
+});
+const n = nodes.length;
+const IDX = new Map(nodes.map((nd, i) => [nd.id, i]));
+
+// ---------- 力导向 ----------
+const AREA = 3000 * 1700;
+const K = Math.sqrt(AREA / n);
+
+function simulate(iter) {
+  for (let it = 0; it < iter; it++) {
+    const temp = 150 * Math.pow(1 - it / iter, 1.5) + 0.5;
+    const dx = new Float64Array(n), dy = new Float64Array(n);
+
+    for (let i = 0; i < n; i++) {
+      for (let j = i + 1; j < n; j++) {
+        let vx = nodes[i].x - nodes[j].x, vy = nodes[i].y - nodes[j].y;
+        let d2 = vx * vx + vy * vy;
+        if (d2 < 1) { vx = Math.random() - .5; vy = Math.random() - .5; d2 = 1; }
+        const d = Math.sqrt(d2);
+        const f = (K * K) / d;
+        const ux = vx / d, uy = vy / d;
+        dx[i] += ux * f; dy[i] += uy * f;
+        dx[j] -= ux * f; dy[j] -= uy * f;
+      }
+    }
+    for (const l of links) {
+      const i = IDX.get(l.s.id), j = IDX.get(l.t.id);
+      let vx = l.t.x - l.s.x, vy = l.t.y - l.s.y;
+      let d = Math.hypot(vx, vy) || 1;
+      const f = (d * d) / K;
+      const ux = vx / d, uy = vy / d;
+      dx[i] += ux * f; dy[i] += uy * f;
+      dx[j] -= ux * f; dy[j] -= uy * f;
+    }
+    for (let i = 0; i < n; i++) {
+      const nd = nodes[i], a = anchors[nd.dom];
+      const pull = nd.deg === 0 ? 16 : 4.5;
+      dx[i] += (a.x - nd.x) * pull;
+      dy[i] += (a.y - nd.y) * pull;
+      dx[i] += (CENTER.x - nd.x) * 1.2;
+      dy[i] += (CENTER.y - nd.y) * 1.2;
+
+      const sp = Math.hypot(dx[i], dy[i]) || 1;
+      const lim = Math.min(sp, temp);
+      nd.x += (dx[i] / sp) * lim;
+      nd.y += (dy[i] / sp) * lim;
+    }
+  }
+}
+simulate(1100);
+
+// ---------- 画布 ----------
+const cv = document.getElementById("c");
+const ctx = cv.getContext("2d");
+let W = 0, H = 0, DPR = 1;
+let view = { x: 0, y: 0, k: 1 };
+let hover = null, focus = null, dragNode = null, dragStart = null;
+
+function normalizeLayout() {
+  let minX = 1e9, maxX = -1e9, minY = 1e9, maxY = -1e9;
+  nodes.forEach(nd => {
+    minX = Math.min(minX, nd.x); maxX = Math.max(maxX, nd.x);
+    minY = Math.min(minY, nd.y); maxY = Math.max(maxY, nd.y);
+  });
+  const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+  const bw = Math.max(1, maxX - minX), bh = Math.max(1, maxY - minY);
+  const PADX = 110, PADY = 78;
+  const s = Math.min((W - PADX * 2) / bw, (H - PADY * 2) / bh, 1.25);
+  nodes.forEach(nd => { nd.x = (nd.x - cx) * s; nd.y = (nd.y - cy) * s; });
+  view = { x: 0, y: 0, k: 1 };
+}
+
+function resize() {
+  W = window.innerWidth; H = window.innerHeight;
+  DPR = window.devicePixelRatio || 1;
+  cv.style.width = W + "px"; cv.style.height = H + "px";
+  cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  if (!resize.fitted) { normalizeLayout(); resize.fitted = true; }
+}
+window.addEventListener("resize", resize); resize();
+
+function toWorld(px, py) {
+  return { x: (px - W / 2) / view.k + view.x, y: (py - H / 2) / view.k + view.y };
+}
+function neighbors(id) {
+  const s = new Set([id]);
+  links.forEach(l => {
+    if (l.s.id === id) s.add(l.t.id);
+    if (l.t.id === id) s.add(l.s.id);
+  });
+  return s;
+}
+
+// 边几何 + 箭头
+function geom(l) {
+  const s = l.s, t = l.t;
+  const vx = t.x - s.x, vy = t.y - s.y;
+  const d = Math.hypot(vx, vy) || 1;
+  const ux = vx / d, uy = vy / d;
+  const sx = s.x + ux * (s.r + 2), sy = s.y + uy * (s.r + 2);
+  const ex = t.x - ux * (t.r + 9), ey = t.y - uy * (t.r + 9);
+  const mx = (sx + ex) / 2 - vy * 0.07, my = (sy + ey) / 2 + vx * 0.07;
+  return { sx, sy, ex, ey, mx, my, d };
+}
+
+function arrow(x, y, fromX, fromY, color, size) {
+  const a = Math.atan2(y - fromY, x - fromX);
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(x - size * Math.cos(a - 0.42), y - size * Math.sin(a - 0.42));
+  ctx.lineTo(x - size * Math.cos(a + 0.42), y - size * Math.sin(a + 0.42));
+  ctx.closePath();
+  ctx.fillStyle = color;
+  ctx.fill();
+}
+
+function draw() {
+  ctx.clearRect(0, 0, W, H);
+  ctx.save();
+  ctx.translate(W / 2, H / 2);
+  ctx.scale(view.k, view.k);
+  ctx.translate(-view.x, -view.y);
+
+  const active = focus || hover;
+  const near = active ? neighbors(active) : null;
+
+  // 分两遍画：暗的 -> 亮的
+  for (const pass of [0, 1]) {
+    for (const l of links) {
+      const on = near && near.has(l.s.id) && near.has(l.t.id);
+      if ((pass === 1) !== !!on) continue;
+
+      const g = geom(l);
+      let color = "rgba(230,237,243,0.26)";
+      let wdt = 1.15;
+      if (l.k === "in")  color = "rgba(52,211,153," + (on ? .95 : .32) + ")";
+      if (l.k === "out") color = "rgba(248,113,113," + (on ? .95 : .32) + ")";
+      if (l.k === "neg") color = "rgba(239,68,68," + (on ? 1 : .38) + ")";
+      if (on) { color = l.k === "in" ? "rgba(52,211,153,1)"
+                    : l.k === "out" ? "rgba(248,113,113,1)"
+                    : l.k === "neg" ? "rgba(239,68,68,1)"
+                    : "rgba(230,237,243,0.78)"; wdt = 1.8; }
+
+      ctx.beginPath();
+      ctx.moveTo(g.sx, g.sy);
+      ctx.quadraticCurveTo(g.mx, g.my, g.ex, g.ey);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = wdt;
+      ctx.stroke();
+
+      // 箭头（终点；双向再加起点）
+      arrow(g.ex, g.ey, g.mx, g.my, color, 9);
+      if (l.k === "both") {
+        // 起点箭头：方向反向
+        const gx = g.mx + (g.sx - g.mx), gy = g.my + (g.sy - g.my);
+        arrow(g.sx, g.sy, g.mx, g.my, color, 9);
+      }
+    }
+  }
+
+  // 标签避让
+  const placed = [];
+  const okLabel = new Set();
+  ctx.font = "12px 'Microsoft YaHei',sans-serif";
+  [...nodes].sort((a, b) => b.deg - a.deg).forEach(nd => {
+    if (near && !near.has(nd.id)) return;
+    const w = ctx.measureText(nd.label).width;
+    const x0 = nd.x - w / 2, y0 = nd.y + nd.r + 5, h = 14;
+    const hit = placed.some(p => x0 < p.x + p.w && x0 + w > p.x && y0 < p.y + p.h && y0 + h > p.y);
+    if (!hit) { placed.push({ x: x0, y: y0, w, h }); okLabel.add(nd.id); }
+  });
+
+  for (const nd of nodes) {
+    const dim = near && !near.has(nd.id);
+    const isFocus = focus === nd.id;
+    ctx.globalAlpha = dim ? 0.16 : 1;
+
+    if (isFocus || hover === nd.id) {
+      ctx.beginPath();
+      ctx.arc(nd.x, nd.y, nd.r + 6, 0, 7);
+      ctx.fillStyle = DOMAINS[nd.dom] + "38";
+      ctx.fill();
+    }
+    ctx.beginPath();
+    ctx.arc(nd.x, nd.y, nd.r, 0, 7);
+    ctx.fillStyle = DOMAINS[nd.dom];
+    ctx.fill();
+    if (isFocus) {
+      ctx.strokeStyle = "#e6edf3"; ctx.lineWidth = 1.5; ctx.stroke();
+    }
+    if (okLabel.has(nd.id) || isFocus || hover === nd.id) {
+      ctx.font = (isFocus ? "600 " : "") + "12px 'Microsoft YaHei',sans-serif";
+      ctx.textAlign = "center"; ctx.textBaseline = "top";
+      ctx.lineWidth = 3.2; ctx.strokeStyle = "rgba(11,14,20,0.94)";
+      ctx.strokeText(nd.label, nd.x, nd.y + nd.r + 5);
+      ctx.fillStyle = isFocus ? "#e6edf3" : "#a9b4c0";
+      ctx.fillText(nd.label, nd.x, nd.y + nd.r + 5);
+    }
+    ctx.globalAlpha = 1;
+  }
+  ctx.restore();
+  requestAnimationFrame(draw);
+}
+requestAnimationFrame(draw);
+
+// ---------- 交互 ----------
+const tip = document.getElementById("tip");
+function pick(px, py) {
+  const w = toWorld(px, py);
+  let best = null, bd = 1e9;
+  for (const nd of nodes) {
+    const d = Math.hypot(nd.x - w.x, nd.y - w.y);
+    if (d < nd.r + 7 && d < bd) { bd = d; best = nd; }
+  }
+  return best;
+}
+
+cv.addEventListener("mousemove", e => {
+  const r = cv.getBoundingClientRect();
+  const px = e.clientX - r.left, py = e.clientY - r.top;
+  if (dragNode) {
+    const w = toWorld(px, py);
+    dragNode.x = w.x; dragNode.y = w.y; return;
+  }
+  if (dragStart) {
+    view.x -= (px - dragStart.px) / view.k;
+    view.y -= (py - dragStart.py) / view.k;
+    dragStart = { px, py }; return;
+  }
+  const nd = pick(px, py);
+  hover = nd ? nd.id : null;
+  cv.style.cursor = nd ? "pointer" : "grab";
+  if (nd) {
+    tip.textContent = nd.label + " · " + nd.dom;
+    tip.style.left = (e.clientX + 14) + "px";
+    tip.style.top = (e.clientY + 14) + "px";
+    tip.style.opacity = 1;
+  } else tip.style.opacity = 0;
+});
+
+cv.addEventListener("mousedown", e => {
+  const r = cv.getBoundingClientRect();
+  const px = e.clientX - r.left, py = e.clientY - r.top;
+  const nd = pick(px, py);
+  if (nd) dragNode = nd; else { dragStart = { px, py }; cv.classList.add("dragging"); }
+});
+window.addEventListener("mouseup", () => {
+  dragNode = null; dragStart = null; cv.classList.remove("dragging");
+});
+cv.addEventListener("click", e => {
+  const r = cv.getBoundingClientRect();
+  const nd = pick(e.clientX - r.left, e.clientY - r.top);
+  focus = nd ? (focus === nd.id ? null : nd.id) : null;
+});
+cv.addEventListener("dblclick", () => { focus = null; });
+cv.addEventListener("wheel", e => {
+  e.preventDefault();
+  const r = cv.getBoundingClientRect();
+  const px = e.clientX - r.left, py = e.clientY - r.top;
+  const before = toWorld(px, py);
+  view.k = Math.min(2.4, Math.max(0.3, view.k * (e.deltaY > 0 ? 0.9 : 1.1)));
+  const after = toWorld(px, py);
+  view.x += before.x - after.x;
+  view.y += before.y - after.y;
+}, { passive: false });
+
+// 图例 + 副标题
+document.getElementById("sub").textContent =
+  nodes.length + " 个环节 · " + links.length + " 条流转 · 6 大业务域 + 主数据";
+const lg = document.getElementById("legend");
+Object.entries(DOMAINS).forEach(([d, c]) => {
+  const s = document.createElement("span");
+  s.innerHTML = '<i style="background:' + c + '"></i>' + d;
+  lg.appendChild(s);
+});
+const leg2 = document.createElement("span");
+leg2.innerHTML = '<i style="background:#34d399"></i>入库(增)　<i style="background:#f87171"></i>出库(减)';
+lg.appendChild(leg2);
+</script>
+</body>
+</html>
+
