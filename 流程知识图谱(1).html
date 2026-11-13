@@ -2,7 +2,8 @@
 <html lang="zh">
 <head>
 <meta charset="utf-8">
-<title>ERP 流程知识图谱</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HySum ERP 全流程可追踪可追溯看板</title>
 <style>
   /* 取值对齐 Obsidian 默认深色主题的图谱变量：
      --background-primary #101010 / --graph-line #3f3f3f / --graph-node #b3b3b3 / --graph-text #dadada */
@@ -69,13 +70,57 @@
   #panel button{flex:1;background:#2b2f36;border:1px solid #3c4149;border-radius:5px;
     color:#9aa0ab;padding:4px 0;font-size:10.5px;cursor:pointer;font-family:inherit;transition:.1s}
   #panel button:hover{background:#333840;color:#c3c8d0}
+  .trace-launch{position:fixed;right:61px;top:17px;z-index:4}
+  .trace-board{position:fixed;inset:0;z-index:8;overflow:auto;background:#10161d;color:#f0f5fa}
+  .trace-board[hidden]{display:none}
+  .trace-inner{max-width:1150px;margin:auto;padding:42px 24px 48px}
+  .trace-header{display:flex;justify-content:space-between;align-items:start;gap:20px}
+  .trace-brand{font-size:15px;font-weight:700;letter-spacing:.05em;color:#7ce0cd}
+  .trace-header h1{margin:10px 0;font-size:clamp(25px,4vw,43px);line-height:1.2}
+  .trace-header p,.trace-detail p{color:#bac9d6;line-height:1.65;margin:0}
+  .trace-header button,.trace-launch,.trace-detail button{font:inherit;color:#e7eff7;background:#243340;border:1px solid #516b7d;border-radius:7px;padding:8px 12px;cursor:pointer}
+  .trace-header button{white-space:nowrap}
+  .trace-routes{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;margin:26px 0 18px}
+  .trace-route,.trace-detail{background:#171f28;border:1px solid #344554;border-radius:12px;padding:14px 16px}
+  .trace-route h2{font-size:14px;color:#bdcddd;margin:0 0 12px}
+  .trace-scroll{overflow-x:auto;padding:4px}
+  .trace-chain{display:flex;align-items:center;min-width:max-content}
+  .trace-module,.trace-arrow{font:inherit;cursor:pointer;border-radius:8px}
+  .trace-module{color:#edf8ff;background:#22303c;border:1px solid #537086;padding:10px 12px;font-weight:600}
+  .trace-arrow{display:grid;justify-items:center;gap:1px;background:transparent;border:1px solid transparent;color:#8de0cf;padding:3px 8px;font-size:12px}
+  .trace-arrow strong{font-size:23px;line-height:1}
+  .trace-arrow[aria-pressed="true"]{background:#1e423f;border-color:#55ae9e;color:#e0fff7}
+  .trace-arrow:hover,.trace-module:hover{border-color:#83d6ce}
+  .trace-board button:focus-visible{outline:2px solid #8de0cf;outline-offset:2px}
+  .trace-detail h2{font-size:17px;margin:0 0 8px}
+  .trace-detail ol{margin:10px 0;padding-left:23px;line-height:1.7}
+  .trace-detail button{margin:8px 8px 0 0;font-size:13px}
+  .trace-note{font-size:13px;color:#a6b8c8;margin:14px 0 0}
+  @media(max-width:580px){.trace-inner{padding:24px 12px}.trace-header{flex-wrap:wrap}.trace-route,.trace-detail{padding:12px}.trace-module{padding:8px}.trace-arrow{padding:3px 5px}}
 </style>
 </head>
 <body>
 <canvas id="c"></canvas>
+<button id="traceLaunch" class="trace-launch" type="button">全流程看板</button>
+<main id="traceBoard" class="trace-board" aria-labelledby="traceTitle">
+  <div class="trace-inner">
+    <header class="trace-header">
+      <div>
+        <span class="trace-brand">HySum ERP</span>
+        <h1 id="traceTitle">全流程可追踪可追溯看板</h1>
+        <p>点箭头查看跨流程的单据流转和来源，点模块查看原流程图。</p>
+      </div>
+      <button id="traceGraph" type="button">查看完整知识图谱</button>
+    </header>
+    <div id="traceRoutes" class="trace-routes"></div>
+    <section id="traceDetail" class="trace-detail" aria-live="polite"></section>
+    <p class="trace-note">依据现有九张流程图梳理。看板展示流程与单据关系，实际单号、批次及库存记录需在 ERP 中查询。</p>
+  </div>
+</main>
+
 
 <div id="brand">
-  <h1>思源 ERP 流程知识图谱</h1>
+  <h1>HySum ERP 流程知识图谱</h1>
   <p id="sub"></p>
 </div>
 <div id="filters"></div>
@@ -1019,6 +1064,113 @@ refresh();
 restarts(true);
 updateSub();
 loop();
+/* 跨流程箭头以已有节点和有向边为依据。 */
+const traceRoutes=[
+  {label:"订单到交付与回款", modules:["d1","d2","d6","d7"], steps:[
+    {label:"订单下达", paths:[["s_order","p_wo"]]},
+    {label:"完工入库", paths:[["p_wo","p_daily","p_in","w_pw"]]},
+    {label:"出库与回款", paths:[["w_pw","w_out"],["s_dlv","w_out"],["s_dlv","s_inv","s_stmt","s_rcv"]],
+      note:"成品仓与销售送货在产品出库节点汇合，销售送货也关联开票与回款。"},
+  ]},
+  {label:"缺料到采购与付款", modules:["d2","d3","d4","d5","d8"], steps:[
+    {label:"缺料请购", paths:[["p_wo","p_mc","u_req","u_po"]]},
+    {label:"到货报检", paths:[["u_po","u_tmp","q_iqc"]]},
+    {label:"允收入库", paths:[["q_iqc","u_in","w_mw"],["u_po","u_in","w_mw"],["q_iqc","q_reject"]],
+      note:"允收与免检进入入库路径，拒收进入退供应商路径。"},
+    {label:"入库到付款", paths:[["u_in","w_mw"],["u_in","u_inv","u_stmt","u_pay"]],
+      note:"以采购入库单回查库存增加与供应商结算。"},
+  ]},
+  {label:"领退料与工单成本", modules:["d5","d2","d9"], steps:[
+    {label:"按工单领料", paths:[["p_wo","w_pick"],["w_mw","w_pick"]],
+      note:"从原材料仓的生产领料记录回查对应工单。"},
+    {label:"归集生产成本", paths:[["p_wo","p_daily","f_cost","f_costlist"],["p_wo","p_in","f_cost"],["w_pick","f_cost"],["w_rtn","f_cost"]]},
+  ]},
+];
+
+const traceBoard=document.getElementById("traceBoard");
+const traceLaunch=document.getElementById("traceLaunch");
+const traceDetail=document.getElementById("traceDetail");
+const graphControls=[...document.querySelectorAll("#brand,#filters,#legend,#hint,#gear,#panel,#traceLaunch")];
+graphControls.forEach(element=>{element.inert=true;});
+const traceLinks=new Map(links.map(link=>[link.s.id+"|"+link.t.id,link]));
+const moduleChips=new Map([...fbox.children].map((entry,index)=>[index===0?null:Object.keys(DIA)[index-1],entry]));
+
+function traceElement(tag,value,className){
+  const el=document.createElement(tag);
+  el.textContent=value;
+  if(className)el.className=className;
+  return el;
+}
+function traceButton(value,className,action){
+  const button=traceElement("button",value,className);
+  button.type="button";
+  button.addEventListener("click",action);
+  return button;
+}
+function showModule(moduleId){
+  moduleChips.get(moduleId).click();
+  traceBoard.hidden=true;
+  graphControls.forEach(element=>{element.inert=false;});
+  traceLaunch.focus();
+}
+function showTrace(from,to,step,button){
+  const prior=document.querySelector(".trace-arrow[aria-pressed=true]");
+  if(prior)prior.setAttribute("aria-pressed","false");
+  button.setAttribute("aria-pressed","true");
+  const heading=traceElement("h2",DIA[from]+" → "+DIA[to]+" · "+step.label);
+  const list=document.createElement("ol");
+  const sources=new Set();
+  for(const path of step.paths){
+    const evidence=[];
+    for(let i=1;i<path.length;i++){
+      const edge=traceLinks.get(path[i-1]+"|"+path[i]);
+      const diagrams=Object.keys(edge.dias);
+      diagrams.forEach(id=>sources.add(id));
+      evidence.push(edge.s.label+" → "+edge.t.label+(edge.lb?" · "+edge.lb:"")+"（"+diagrams.map(id=>DIA[id]).join("、")+"）");
+    }
+    const row=traceElement("li",path.map(id=>byId[id].label).join(" → "));
+    const details=document.createElement("details");
+    details.append(traceElement("summary","查看逐段来源"));
+    const edgeList=document.createElement("ul");
+    edgeList.append(...evidence.map(value=>traceElement("li",value)));
+    details.append(edgeList);
+    row.append(details);
+    list.append(row);
+  }
+  traceDetail.replaceChildren(heading,list);
+  if(step.note)traceDetail.append(traceElement("p",step.note));
+  traceDetail.append(...[...sources].map(id=>traceButton("查看"+DIA[id],"",()=>showModule(id))));
+}
+for(const route of traceRoutes){
+  const section=traceElement("section","","trace-route");
+  const chain=traceElement("div","","trace-chain");
+  const scroll=traceElement("div","","trace-scroll");
+  route.modules.forEach((moduleId,index)=>{
+    chain.append(traceButton(DIA[moduleId],"trace-module",()=>showModule(moduleId)));
+    const step=route.steps[index];
+    if(!step)return;
+    const next=route.modules[index+1];
+    const button=traceButton("","trace-arrow",()=>{
+      showTrace(moduleId,next,step,button);
+      if(button.dataset.ready)traceDetail.scrollIntoView({block:"nearest"});
+    });
+    button.setAttribute("aria-pressed","false");
+    button.setAttribute("aria-label",DIA[moduleId]+" 到 "+DIA[next]+"："+step.label);
+    button.append(traceElement("strong","→"),traceElement("span",step.label));
+    chain.append(button);
+  });
+  scroll.append(chain);
+  section.append(traceElement("h2",route.label),scroll);
+  document.getElementById("traceRoutes").append(section);
+}
+document.getElementById("traceGraph").onclick=()=>showModule(null);
+traceLaunch.onclick=()=>{
+  traceBoard.hidden=false;
+  graphControls.forEach(element=>{element.inert=true;});
+  document.getElementById("traceGraph").focus();
+};
+document.querySelector(".trace-arrow").click();
+document.querySelectorAll(".trace-arrow").forEach(button=>{button.dataset.ready="true";});
 </script>
 </body>
 </html>
